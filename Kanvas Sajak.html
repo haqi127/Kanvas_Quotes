@@ -1,0 +1,513 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Kanvas Sajak</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Cormorant+Garamond:ital,wght@0,400..700;1,400..700&family=Inter:wght@400..700&family=Lora:ital,wght@0,400..700;1,400..700&family=Playfair+Display:wght@400..700&family=Poppins:ital,wght@0,500;1,700&display=swap">
+<style>
+/* Layout: pratinjau kanvas 4:5 di kiri (menempel saat scroll), panel kontrol di kanan; satu kolom di ponsel. */
+:root {
+  --bg: #f1f4f6;
+  --panel: #ffffff;
+  --fg: #13202b;
+  --muted: #566878;
+  --line: #d6dee5;
+  --accent: #1d6c88;
+  --accent-fg: #ffffff;
+  --field: #f7f9fa;
+  --display: "Cormorant Garamond", Georgia, serif;
+  --text: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1318; --panel: #151d25; --fg: #e6edf2; --muted: #92a3b2;
+    --line: #27333e; --accent: #5cb6d4; --accent-fg: #07161d; --field: #0f171d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1318; --panel: #151d25; --fg: #e6edf2; --muted: #92a3b2;
+  --line: #27333e; --accent: #5cb6d4; --accent-fg: #07161d; --field: #0f171d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.5 var(--text);
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 24px; }
+header h1 { font: italic 600 clamp(2rem, 5vw, 2.8rem)/1.05 var(--display); margin: 0 0 6px; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 60ch; }
+.app { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 880px) {
+  .app { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); }
+  .preview { position: sticky; top: 20px; }
+}
+.preview { display: grid; gap: 10px; min-width: 0; }
+.stage { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); line-height: 0; }
+canvas { display: block; width: 100%; height: auto; max-width: 100%; touch-action: pan-y; }
+canvas.draggable { cursor: grab; touch-action: none; }
+canvas.dragging { cursor: grabbing; }
+.hint { margin: 0; color: var(--muted); font-size: 13px; }
+.controls { display: grid; gap: 16px; min-width: 0; }
+fieldset { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); margin: 0; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+legend { padding: 0 6px; font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > label, .lbl { font-size: 13px; font-weight: 500; }
+.field small { color: var(--muted); font-weight: 400; }
+input[type=text], textarea, select {
+  width: 100%; font: inherit; color: var(--fg); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px;
+}
+textarea { min-height: 190px; resize: vertical; line-height: 1.5; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, .btn:focus-within,
+.seg label:has(input:focus-visible), .sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--field); width: fit-content; max-width: 100%; }
+.seg label { padding: 7px 16px; cursor: pointer; font-size: 14px; position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--accent-fg); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { width: 44px; height: 44px; border-radius: 6px; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.sw[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.colors { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.colors label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+input[type=color] { width: 36px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+button, .btn {
+  font: inherit; font-weight: 600; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--field); color: var(--fg); padding: 10px 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-size: 16px; padding: 13px 18px; }
+button:disabled { opacity: .6; cursor: progress; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.btn { position: relative; }
+.status { min-height: 1.4em; font-size: 13px; color: var(--muted); margin: 0; }
+.status.err { color: #c0392b; }
+[data-bg-image][hidden], [data-bg-color][hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Kanvas Sajak</h1>
+    <p>Ganti isi sajak, tema, dan latar, lalu unduh sebagai PNG 4:5 siap unggah ke Instagram. Tata letak sudah tetap, jadi tidak perlu mendesain ulang.</p>
+  </header>
+
+  <div class="app">
+    <div class="preview">
+      <div class="stage"><canvas id="cv" width="1080" height="1350" role="img" aria-label="Pratinjau desain sajak"></canvas></div>
+      <p class="hint" id="dragHint" hidden>Geser gambar pada pratinjau untuk mengatur posisinya.</p>
+    </div>
+
+    <div class="controls">
+      <fieldset>
+        <legend>Isi konten</legend>
+        <div class="row">
+          <div class="field">
+            <label for="theme">Nama tema <small>(pojok kiri atas)</small></label>
+            <input type="text" id="theme" value="sabtusajak" maxlength="32" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="handle">Akun <small>(pojok kanan bawah)</small></label>
+            <input type="text" id="handle" value="@narahaniii | nozafi_" maxlength="48" autocomplete="off">
+          </div>
+        </div>
+        <div class="field">
+          <label for="title">Judul sajak <small>(boleh dikosongkan)</small></label>
+          <input type="text" id="title" value="Menunggu" maxlength="60" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="body">Isi sajak <small>(baris kosong = jeda antarbait)</small></label>
+          <textarea id="body" spellcheck="false">Hujan tak pernah benar-benar pergi,
+ia hanya belajar menunggu
+di sela daun yang basah.
+
+Seperti doa yang kita titipkan
+pada langit sebelum subuh,
+tak selalu cepat sampai,
+tapi tak pernah salah alamat.</textarea>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Latar belakang</legend>
+        <div class="seg" role="radiogroup" aria-label="Jenis latar">
+          <label><input type="radio" name="bgmode" value="color" checked>Warna</label>
+          <label><input type="radio" name="bgmode" value="image">Gambar sendiri</label>
+        </div>
+
+        <div data-bg-color class="field">
+          <span class="lbl">Pilih warna</span>
+          <div class="swatches" id="swatches"></div>
+          <div class="colors">
+            <label>Warna atas <input type="color" id="c1" value="#0f1b2d"></label>
+            <label>Warna bawah <input type="color" id="c2" value="#26405f"></label>
+          </div>
+        </div>
+
+        <div data-bg-image hidden class="field">
+          <div class="btnrow">
+            <label class="btn"><input type="file" id="file" accept="image/*">Pilih gambar</label>
+            <button type="button" id="clearImg">Hapus gambar</button>
+          </div>
+          <p class="status" id="imgStatus">Belum ada gambar. Latar memakai warna sampai gambar dipilih.</p>
+          <div class="row">
+            <div class="field"><label for="zoom">Perbesar</label><input type="range" id="zoom" min="1" max="3" step="0.01" value="1"></div>
+            <div class="field"><label for="dim">Gelapkan agar teks terbaca</label><input type="range" id="dim" min="0" max="0.85" step="0.01" value="0.4"></div>
+            <div class="field"><label for="blur">Blur gambar</label><input type="range" id="blur" min="0" max="40" step="1" value="0"></div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Teks</legend>
+        <div class="row">
+          <div class="field">
+            <label for="font">Huruf</label>
+            <select id="font">
+              <option value="cormorant">Cormorant (miring, klasik)</option>
+              <option value="playfair">Playfair Display (tegak)</option>
+              <option value="lora">Lora (miring, lembut)</option>
+              <option value="caveat">Caveat (tulisan tangan)</option>
+              <option value="inter">Inter (modern)</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Perataan</span>
+            <div class="seg" role="radiogroup" aria-label="Perataan teks">
+              <label><input type="radio" name="align" value="center" checked>Tengah</label>
+              <label><input type="radio" name="align" value="left">Kiri</label>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="size">Ukuran maksimum</label><input type="range" id="size" min="0.6" max="1.4" step="0.01" value="1"></div>
+          <div class="field"><span class="lbl">Warna teks</span><div class="colors"><label><input type="color" id="tcolor" value="#ffffff"> <span id="tcolorHex">#ffffff</span></label></div></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Unduh</legend>
+        <div class="field">
+          <label for="res">Kualitas</label>
+          <select id="res">
+            <option value="1">HD 1080 × 1350 px</option>
+            <option value="2" selected>Ultra HD 2160 × 2700 px</option>
+          </select>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="primary" id="dl">Unduh PNG</button>
+          <button type="button" id="reset">Kembalikan contoh</button>
+        </div>
+        <p class="status" id="dlStatus" role="status"></p>
+      </fieldset>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var W = 1080, H = 1350, MARGIN = 84, curScale = 1;
+  var FONTS = {
+    cormorant: { fam: '"Cormorant Garamond", Georgia, serif', style: 'italic', weight: 500, lh: 1.32, tw: 600 },
+    playfair:  { fam: '"Playfair Display", Georgia, serif',   style: 'normal', weight: 400, lh: 1.42, tw: 700 },
+    lora:      { fam: 'Lora, Georgia, serif',                 style: 'italic', weight: 400, lh: 1.42, tw: 600 },
+    caveat:    { fam: 'Caveat, "Comic Sans MS", cursive',     style: 'normal', weight: 500, lh: 1.2,  tw: 700 },
+    inter:     { fam: 'Inter, system-ui, sans-serif',         style: 'normal', weight: 400, lh: 1.5,  tw: 600 }
+  };
+  var PRESETS = [
+    { n: 'Malam',  c1: '#0f1b2d', c2: '#26405f', t: '#ffffff' },
+    { n: 'Senja',  c1: '#3a1f3b', c2: '#c4694f', t: '#fff6ee' },
+    { n: 'Hutan',  c1: '#10241d', c2: '#3b6b55', t: '#f1f7f3' },
+    { n: 'Laut',   c1: '#0b3a4a', c2: '#2aa0b8', t: '#ffffff' },
+    { n: 'Pasir',  c1: '#f2eadd', c2: '#d8c5a6', t: '#2b2118' },
+    { n: 'Kertas', c1: '#fbfbfa', c2: '#e9ebed', t: '#16202a' }
+  ];
+  var DEFAULTS = {
+    theme: 'sabtusajak', handle: '@narahaniii | nozafi_', title: 'Menunggu',
+    body: document.getElementById('body').value
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('cv'), ctx = cv.getContext('2d');
+  var img = null, ox = 0, oy = 0;
+  var el = {
+    theme: $('theme'), handle: $('handle'), title: $('title'), body: $('body'),
+    c1: $('c1'), c2: $('c2'), zoom: $('zoom'), dim: $('dim'), blur: $('blur'), font: $('font'),
+    size: $('size'), tcolor: $('tcolor'), res: $('res')
+  };
+  function radio(name) { var r = document.querySelector('input[name="' + name + '"]:checked'); return r ? r.value : ''; }
+
+  /* ---------- simpan teks per peramban (opsional) ---------- */
+  var KEY = 'kanvas-sajak-v1';
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        theme: el.theme.value, handle: el.handle.value, title: el.title.value, body: el.body.value,
+        font: el.font.value
+      }));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      var d = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!d) return;
+      ['theme', 'handle', 'title', 'body'].forEach(function (k) { if (typeof d[k] === 'string') el[k].value = d[k]; });
+      if (d.font && FONTS[d.font]) el.font.value = d.font;
+    } catch (e) {}
+  }
+
+  /* ---------- huruf ---------- */
+  function fontStr(f, size, title) {
+    var weight = title ? f.tw : f.weight, style = title ? 'normal' : f.style;
+    return style + ' ' + weight + ' ' + size + 'px ' + f.fam;
+  }
+  function ensureFonts() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    var f = FONTS[el.font.value];
+    var jobs = [
+      document.fonts.load(fontStr(f, 40, false), 'Aa'),
+      document.fonts.load(fontStr(f, 40, true), 'Aa'),
+      document.fonts.load('italic 700 24px Poppins', 'Aa'),
+      document.fonts.load('500 20px Poppins', 'Aa')
+    ];
+    return Promise.all(jobs).catch(function () {});
+  }
+
+  /* ---------- tata letak teks ---------- */
+  function wrap(c, text, maxW) {
+    var words = text.split(/\s+/).filter(Boolean), lines = [], cur = '';
+    words.forEach(function (w) {
+      var test = cur ? cur + ' ' + w : w;
+      if (cur && c.measureText(test).width > maxW) { lines.push(cur); cur = w; } else { cur = test; }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function build(c, f, s, maxW) {
+    var items = [], h = 0, title = el.title.value.trim();
+    if (title) {
+      var ts = s * 1.3, tl = ts * 1.18;
+      c.font = fontStr(f, ts, true);
+      wrap(c, title, maxW).forEach(function (t) { items.push({ t: t, y: h + tl / 2, font: fontStr(f, ts, true) }); h += tl; });
+      h += s * 0.45; items.push({ rule: true, y: h }); h += s * 0.95;
+    }
+    var lh = s * f.lh;
+    c.font = fontStr(f, s, false);
+    el.body.value.replace(/\r/g, '').split('\n').forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) { h += lh * 0.8; return; }
+      wrap(c, line, maxW).forEach(function (t) { items.push({ t: t, y: h + lh / 2, font: fontStr(f, s, false) }); h += lh; });
+    });
+    return { items: items, h: h };
+  }
+
+  /* ---------- gambar ---------- */
+  function drawBackground(c) {
+    var useImg = radio('bgmode') === 'image' && img;
+    if (useImg) {
+      var z = Number(el.zoom.value);
+      var base = Math.max(W / img.width, H / img.height) * z;
+      var dw = img.width * base, dh = img.height * base;
+      var mx = (dw - W) / 2, my = (dh - H) / 2;
+      ox = Math.max(-mx, Math.min(mx, ox)); oy = Math.max(-my, Math.min(my, oy));
+      var bx = (W - dw) / 2 + ox, by = (H - dh) / 2 + oy, bl = Number(el.blur.value) || 0;
+      if (bl > 0) {
+        var p = bl * 2;
+        if ('filter' in c) {
+          c.save(); c.filter = 'blur(' + (bl * curScale) + 'px)';
+          c.drawImage(img, bx - p, by - p, dw + 2 * p, dh + 2 * p);
+          c.restore();
+        } else {
+          var k = 1 + bl / 2, t = document.createElement('canvas');
+          t.width = Math.max(8, Math.round(W / k)); t.height = Math.max(8, Math.round(H / k));
+          var tc = t.getContext('2d'); tc.imageSmoothingQuality = 'high';
+          tc.drawImage(img, (bx - p) / k, (by - p) / k, (dw + 2 * p) / k, (dh + 2 * p) / k);
+          c.imageSmoothingQuality = 'high'; c.drawImage(t, 0, 0, W, H);
+        }
+      } else {
+        c.drawImage(img, bx, by, dw, dh);
+      }
+      c.fillStyle = 'rgba(0,0,0,' + el.dim.value + ')';
+      c.fillRect(0, 0, W, H);
+    } else {
+      var g = c.createLinearGradient(W * 0.15, 0, W * 0.85, H);
+      g.addColorStop(0, el.c1.value); g.addColorStop(1, el.c2.value);
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+    }
+    return useImg;
+  }
+
+  /* ---------- gambar utama ---------- */
+  function draw(c, scale) {
+    curScale = scale;
+    c.setTransform(scale, 0, 0, scale, 0, 0);
+    c.clearRect(0, 0, W, H);
+    var onImage = drawBackground(c);
+    var f = FONTS[el.font.value], color = el.tcolor.value;
+    var align = radio('align'), maxW = W - MARGIN * 2;
+    var availH = H - 2 * 210;
+    var maxSize = 62 * Number(el.size.value), s = maxSize, lay;
+    for (; s >= 20; s -= 1) { lay = build(c, f, s, maxW); if (lay.h <= availH) break; }
+    lay = lay || build(c, f, 20, maxW);
+
+    c.save();
+    if (onImage) { c.shadowColor = 'rgba(0,0,0,.4)'; c.shadowBlur = 14; c.shadowOffsetY = 2; }
+    c.fillStyle = color; c.textBaseline = 'middle';
+    c.textAlign = align === 'left' ? 'left' : 'center';
+    var x = align === 'left' ? MARGIN : W / 2, top = (H - lay.h) / 2;
+    lay.items.forEach(function (it) {
+      if (it.rule) {
+        c.globalAlpha = 0.6;
+        c.fillRect(align === 'left' ? x : x - 36, top + it.y - 1.5, 72, 3);
+        c.globalAlpha = 1;
+      } else { c.font = it.font; c.fillText(it.t, x, top + it.y); }
+    });
+    c.restore();
+
+    /* label tema, kiri atas */
+    c.save();
+    c.fillStyle = color; c.textBaseline = 'middle'; c.textAlign = 'left';
+    if (onImage) { c.shadowColor = 'rgba(0,0,0,.4)'; c.shadowBlur = 10; }
+    if ('letterSpacing' in c) c.letterSpacing = '2px';
+    c.font = 'italic 700 26px Poppins, Inter, system-ui, sans-serif';
+    var theme = el.theme.value.trim();
+    if (theme) {
+      c.globalAlpha = 0.9;
+      c.beginPath(); c.arc(MARGIN + 6, MARGIN + 1, 6, 0, Math.PI * 2); c.fill();
+      c.fillText(theme, MARGIN + 26, MARGIN);
+    }
+    /* akun, kanan bawah */
+    c.textAlign = 'right'; c.globalAlpha = 0.85;
+    if ('letterSpacing' in c) c.letterSpacing = '0.5px';
+    c.font = '500 19px Poppins, Inter, system-ui, sans-serif';
+    var handle = el.handle.value.trim();
+    if (handle) c.fillText(handle, W - MARGIN, H - MARGIN);
+    c.restore();
+  }
+
+  var raf = 0;
+  function render() { cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { draw(ctx, 1); }); }
+
+  /* ---------- kontrol ---------- */
+  function toggleMode() {
+    var m = radio('bgmode');
+    document.querySelector('[data-bg-color]').hidden = m !== 'color';
+    document.querySelector('[data-bg-image]').hidden = m !== 'image';
+    var can = m === 'image' && !!img;
+    $('dragHint').hidden = !can;
+    cv.classList.toggle('draggable', can);
+    render();
+  }
+  var sw = $('swatches');
+  PRESETS.forEach(function (p, i) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'sw'; b.title = p.n; b.setAttribute('aria-label', 'Warna ' + p.n);
+    b.style.background = 'linear-gradient(160deg,' + p.c1 + ',' + p.c2 + ')';
+    b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    b.addEventListener('click', function () {
+      el.c1.value = p.c1; el.c2.value = p.c2; el.tcolor.value = p.t; $('tcolorHex').textContent = p.t;
+      Array.prototype.forEach.call(sw.children, function (n) { n.setAttribute('aria-pressed', 'false'); });
+      b.setAttribute('aria-pressed', 'true');
+      render();
+    });
+    sw.appendChild(b);
+  });
+  function unpress() { Array.prototype.forEach.call(sw.children, function (n) { n.setAttribute('aria-pressed', 'false'); }); }
+  el.c1.addEventListener('input', unpress); el.c2.addEventListener('input', unpress);
+
+  ['theme', 'handle', 'title', 'body'].forEach(function (k) { el[k].addEventListener('input', function () { save(); render(); }); });
+  ['c1', 'c2', 'zoom', 'dim', 'blur', 'size'].forEach(function (k) { el[k].addEventListener('input', render); });
+  el.tcolor.addEventListener('input', function () { $('tcolorHex').textContent = el.tcolor.value; render(); });
+  el.font.addEventListener('change', function () { save(); ensureFonts().then(render); render(); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="bgmode"]'), function (r) { r.addEventListener('change', toggleMode); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="align"]'), function (r) { r.addEventListener('change', render); });
+
+  $('file').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0], st = $('imgStatus');
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { st.textContent = 'File harus berupa gambar (JPG, PNG, atau WebP).'; st.className = 'status err'; return; }
+    var fr = new FileReader();
+    fr.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        img = im; ox = 0; oy = 0; el.zoom.value = 1;
+        st.className = 'status'; st.textContent = 'Gambar dipakai: ' + f.name + ' (' + im.width + ' × ' + im.height + ' px).';
+        toggleMode();
+      };
+      im.onerror = function () { st.className = 'status err'; st.textContent = 'Gambar tidak bisa dibuka. Coba file lain.'; };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(f);
+  });
+  $('clearImg').addEventListener('click', function () {
+    img = null; ox = oy = 0; $('file').value = '';
+    $('imgStatus').className = 'status'; $('imgStatus').textContent = 'Belum ada gambar. Latar memakai warna sampai gambar dipilih.';
+    toggleMode();
+  });
+
+  /* geser gambar di pratinjau */
+  var drag = null;
+  cv.addEventListener('pointerdown', function (e) {
+    if (!(radio('bgmode') === 'image' && img)) return;
+    drag = { x: e.clientX, y: e.clientY, ox: ox, oy: oy };
+    cv.classList.add('dragging'); cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var k = W / cv.getBoundingClientRect().width;
+    ox = drag.ox + (e.clientX - drag.x) * k; oy = drag.oy + (e.clientY - drag.y) * k; render();
+  });
+  function endDrag() { drag = null; cv.classList.remove('dragging'); }
+  cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+  $('reset').addEventListener('click', function () {
+    el.theme.value = DEFAULTS.theme; el.handle.value = DEFAULTS.handle; el.title.value = DEFAULTS.title; el.body.value = DEFAULTS.body;
+    save(); render();
+  });
+
+  /* ---------- unduh ---------- */
+  function slug(s) { return (s || 'sajak').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'sajak'; }
+  var dlBtn = $('dl'), dlStatus = $('dlStatus');
+  function say(msg, err) { dlStatus.textContent = msg; dlStatus.className = 'status' + (err ? ' err' : ''); }
+  dlBtn.addEventListener('click', async function () {
+    dlBtn.disabled = true; say('Menyiapkan gambar...');
+    try {
+      await ensureFonts();
+      var S = Number(el.res.value) || 1;
+      var out = document.createElement('canvas'); out.width = W * S; out.height = H * S;
+      draw(out.getContext('2d'), S);
+      var blob = await new Promise(function (res) { out.toBlob(res, 'image/png'); });
+      if (!blob) throw new Error('Gagal membuat gambar.');
+      var name = slug(el.theme.value) + '-' + new Date().toISOString().slice(0, 10) + '-' + (W * S) + 'x' + (H * S) + '.png';
+      var d = null;
+      try { d = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { d = null; }
+      if (d) {
+        try {
+          await d.save({ filename: name, data: blob });
+          say('Tersimpan: ' + name);
+        } catch (err) {
+          if (err && err.code === 'declined') say('Unduhan dibatalkan.');
+          else if (err && err.code === 'host_unavailable') say('Aplikasi ini belum bisa menyimpan file. Buka halaman ini di peramban atau komputer.', true);
+          else say('Unduhan gagal. Coba lagi.', true);
+        }
+      } else {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        say('Mengunduh: ' + name);
+      }
+    } catch (e) { say(e && e.message ? e.message : 'Unduhan gagal.', true); }
+    dlBtn.disabled = false;
+  });
+
+  load();
+  toggleMode();
+  ensureFonts().then(render);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+})();
+</script>
+
+</body></html>
